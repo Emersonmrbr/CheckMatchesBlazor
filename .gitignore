@@ -1,0 +1,9 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/CheckMatchesBlazor/bin/Debug/net9.0
+/CheckMatchesBlazor/obj
+/CheckMatchesBlazor.Client/bin/Debug/net9.0
+/CheckMatchesBlazor.Client/obj
+/.vs
