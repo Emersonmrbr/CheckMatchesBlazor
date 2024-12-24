@@ -1,113 +1,116 @@
 ﻿@page "/"
-@* @implements IDisposable *@
-@inject ILogger<CheckMatches> Logger
+@implements IDisposable
+@inject ILogger<Home> Logger
 @inject IConfiguration Config
 
 <PageTitle>Check Matches</PageTitle>
 
 <h3>Check Matches</h3>
 
-<EditForm Model="Model" OnValidSubmit="OnValidSubmit" FormName="CheckMatche" class="form-floating">
+<EditForm Model="Model" OnValidSubmit="OnValidSubmit" FormName="CheckMatches" class="form-floating">
     <DataAnnotationsValidator />
     <div class="row g-2 mb-6">
         <div class="col">
             <div class="row">
-                <div class="col-md-2">
-                    <div class="form-floating">
-                        <InputNumber @bind-Value="Model!.Result![0]" Min="1" Max="60" step="1" class="form-control" />
+                @for (int i = 0; i < 6; i++)
+                {
+                    <div class="col-md-2">
+                        <div class="form-floating">
+                            <InputNumber @bind-Value="Model!.Result![i]" Min="1" Max="60" step="1" class="form-control" />
+                        </div>
                     </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="form-floating">
-                        <InputNumber @bind-Value="Model!.Result![1]" Min="1" Max="60" step="1" class="form-control" />
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="form-floating">
-                        <InputNumber @bind-Value="Model!.Result![2]" Min="1" Max="60" step="1" class="form-control" />
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="form-floating">
-                        <InputNumber @bind-Value="Model!.Result![3]" Min="1" Max="60" step="1" class="form-control" />
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="form-floating">
-                        <InputNumber @bind-Value="Model!.Result![4]" Min="1" Max="60" step="1" class="form-control" />
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="form-floating">
-                        <InputNumber @bind-Value="Model!.Result![5]" Min="1" Max="60" step="1" class="form-control" />
-                    </div>
-                </div>
+                }
+                <ValidationMessage For="() => Model!.Result" />
             </div>
             <p></p>
             <div class="row">
                 <div class="input-group mb-3">
                     <label class="input-group-text" for="inputGroupFile01">Upload bets</label>
-                    <InputFile type="file" class="form-control" id="inputGroupFile01" OnChange="LoadFiles" multiple />
+                    <InputFile type="file" class="form-control" id="inputGroupFile01" OnChange="LoadFiles" multiple accept=".json" />
                 </div>
+            </div>
+            <div class="d-grid gap-2 col-2">
+                <button type="submit" class="btn btn-outline-success btn-lg">Check</button>
             </div>
         </div>
         <div class="col">
             <div class="col-md">
                 <p>Result Summary</p>
-                <p><ValidationSummary /></p>
-                <p>@Logger</p>
+                <p class="text-bg-danger"><ValidationSummary /></p>
                 <p>@($"Bets with at least one compatible number ({Model!.MessageResults!.Count})")</p>
                 <p>@($"Match result ({Model!.MatchResult!.Count})")</p>
-
                 @if (success)
                 {
-                    <p>Success</p>
+                    <p class="text-bg-success">Success</p>
                     @foreach (var result in Model!.MatchResult!)
                     {
-                        <p>@result</p>
+                        <p class="text-bg-success">@result</p>
                     }
+                }
+                @foreach (var error in Errors)
+                {
+                    <p class="text-bg-danger">@error</p>
                 }
             </div>
         </div>
     </div>
-    <p></p>
-    <div class="d-grid gap-2 col-2">
-        <button type="submit" class="btn btn-outline-success btn-lg">Check</button>
-    </div>
+
 </EditForm>
 
 @code {
     [SupplyParameterFromForm]
     private BetsCheck? Model { get; set; } = new();
 
-    protected override void OnInitialized() => Model ??= new()
+    protected override void OnInitialized()
+    {
+        string directoryPath = Config.GetValue<string>("FileStorage")!;
+        string fileExtension = ".json";
+
+        if (Model is null)
         {
-            Matches = 0,
-            MatchResult = [],
-            MessageResults = [],
-            Result = []
-        };
+            Model!.Matches = 0;
+            Model.MatchResult = new List<string>();
+            Model.MessageResults = new List<string>();
+            Model.Result = new List<int>(new int[6]);
+        }
+        if (Directory.Exists(Path.Combine(directoryPath, "unsafe_uploads")))
+        {
+            string[] files = Directory.GetFiles(Path.Combine(directoryPath, "unsafe_uploads"), fileExtension);
+            foreach (var file in files)
+            {
+                File.Delete(file);
+            }
+        }
+        if (Directory.Exists(Path.Combine(directoryPath, "bets_result")))
+        {
+            string[] files = Directory.GetFiles(Path.Combine(directoryPath, "bets_result"), fileExtension);
+            foreach (var file in files)
+            {
+                File.Delete(file);
+            }
+        }
+    }
 
-    private List<string> errors = new();
-
-    bool success = false;
+    private IList<string> Errors { get; set; } = new List<string>();
+    private bool success = false;
 
     public class BetsCheck
     {
         [Required]
-        public List<int>? Result { get; set; } = [1, 4, 20, 28, 57, 59];
+        public List<int>? Result { get; set; } = new List<int> { 1, 4, 20, 28, 57, 59 };
 
-        public List<string>? MessageResults { get; set; } = new();
+        public List<string>? MessageResults { get; set; } = new List<string>();
 
         public int? Matches { get; set; } = 0;
 
-        public List<string>? MatchResult { get; set; } = new();
+        public List<string>? MatchResult { get; set; } = new List<string>();
 
+        [Required]
+        public IList<IBrowserFile> File { get; set; } = new List<IBrowserFile>();
     }
 
     public class Bets
     {
-
         public int Row { get; set; }
         public List<int>? Numbers { get; set; }
     }
@@ -118,70 +121,60 @@
         public string DevelopedOnDate { get; set; } = "Monday, December 09, 2024";
         public string DeveloperURL { get; set; } = "http://nucleomap.com.br";
         public string DeveloperEmail { get; set; } = "nucleomap@nucleomap.com.br";
-        public string Version { get; set; } = "1.0";
+        public string Version { get; set; } = "2.0.0";
         public string GeneratedBy { get; set; } = Environment.UserName;
         public string GeneratedOnDate { get; set; } = DateTimeOffset.Now.ToString("F");
         public string StationName { get; set; } = Environment.MachineName;
         public string OSVersion { get; set; } = Environment.OSVersion.ToString();
         public int TotalResults { get; set; }
         public int TotalMatches { get; set; }
-        public List<Bets> BettingResult { get; set; } = [];
+        public List<Bets> BettingResult { get; set; } = new List<Bets>();
     }
 
     private void OnValidSubmit()
     {
-
-        string startFolder = "C:\\Windows\\Temp\\unsafe_uploads";
+        Model!.MessageResults!.Clear();
+        Errors.Clear();
+        Model.MessageResults.Clear();
+        string rootFolder = Config.GetValue<string>("FileStorage")!;
+        string startFolder = Path.Combine(rootFolder, "unsafe_uploads");
         string pathResult = "bets_result";
+
+        if (!Directory.Exists(startFolder))
+        {
+            Errors.Add("The file bets is required");
+            return;
+        }
+
         DirectoryInfo dir = new(startFolder);
-        var fileList = dir.GetFiles("*.*", SearchOption.AllDirectories);
-        var fileQuery = from file in fileList
-                        where file.Extension == ".json"
-                        orderby file.Name
-                        select file;
+        var fileQuery = dir.GetFiles("*.json", SearchOption.AllDirectories).OrderBy(file => file.Name);
 
         foreach (FileInfo fi in fileQuery)
         {
-            // Load bets from a JSON file
             List<Bets> bets = LoadBets(fi.FullName);
-
-            // Define the winning numbers
             List<int> gameResult = Model!.Result!;
 
-            // Initialize results
-            List<Bets> bettingResult = [];
+            List<Bets> bettingResult = new List<Bets>();
             int match = 0;
-            Directory.CreateDirectory(Path.Combine(Config.GetValue<string>("FileStorage")!, pathResult));
-            string outFileName = Path.Combine("C:\\Windows\\Temp", pathResult, fi.Name);
+            Directory.CreateDirectory(Path.Combine(rootFolder, pathResult));
+            string outFileName = Path.Combine(rootFolder, pathResult, fi.Name);
 
-
-            // Process each bet
             foreach (var bet in bets!)
             {
-                // Compare bet numbers with the game result
                 List<int> matchNumbers = CompareNumbers(bet, gameResult);
 
                 if (matchNumbers.Count > 0)
                 {
-                    // Add bet to the result list if numbers matched
-                    bettingResult.Add(new Bets
-                        {
-                            Row = bet.Row,
-                            Numbers = matchNumbers,
-                        });
+                    bettingResult.Add(new Bets { Row = bet.Row, Numbers = matchNumbers });
                     Model.MessageResults!.Add($"Result in row {bet.Row} matches these numbers: {string.Join(", ", matchNumbers)}");
-                    Console.WriteLine($"Result in row {bet.Row} matches these numbers: {string.Join(", ", matchNumbers)}");
                 }
                 else
                 {
                     Model.MessageResults!.Add($"Result in row {bet.Row} doesn't match any number.");
-                    Console.WriteLine($"Result in row {bet.Row} doesn't match any number.");
                 }
 
-                // Increment the match counter for perfect matches
                 if (matchNumbers.Count == gameResult.Count)
                 {
-
                     match++;
                     Model.Matches = match;
                     Model.MatchResult!.Add($"Result in row {bet.Row} matches these numbers: {string.Join(", ", matchNumbers)} in file {fi.Name}");
@@ -189,10 +182,7 @@
                 }
             }
 
-            Console.WriteLine($"\nTotal of winning bets: {match} in {fi.Name}\n");
-
-            // Save results as JSON
-            SaveDeleteResultsAsJson(new BetReport
+            SaveResultsAsJson(new BetReport
                 {
                     TotalResults = bettingResult.Count,
                     TotalMatches = match,
@@ -201,44 +191,29 @@
         }
 
         Logger.LogInformation("Submit: Processing form");
-
         StateHasChanged();
     }
 
-
-    public static void SaveDeleteResultsAsJson(BetReport bets, string outFileName)
+    public static void SaveResultsAsJson(BetReport bets, string outFileName)
     {
-        string fileName = string.Concat(outFileName, ".json");
         string json = JsonSerializer.Serialize(bets);
-        File.WriteAllText(fileName, json);
+        File.WriteAllText(outFileName, json);
     }
 
     public static List<Bets> LoadBets(string fileName)
     {
         string json = File.ReadAllText(fileName);
-        Dictionary<string, List<Bets>>? bets = JsonSerializer.Deserialize<Dictionary<string, List<Bets>>>(json);
-        return bets!["Bets"];
+        return JsonSerializer.Deserialize<Dictionary<string, List<Bets>>>(json)?["Bets"] ?? new List<Bets>();
     }
 
     public static List<int> CompareNumbers(Bets bet, List<int> gameResult)
     {
-        List<int> matchedBets = [];
-
-        // Check each number in the bet against the game result
-        foreach (var number in bet!.Numbers!)
-        {
-            if (gameResult.Contains(number))
-            {
-                matchedBets.Add(number);
-            }
-        }
-        return matchedBets;
+        return bet.Numbers?.Where(gameResult.Contains).ToList() ?? new List<int>();
     }
 
-
-    private List<IBrowserFile> loadedFiles = new();
-    private long maxFileSize = 1024 * 1024 * 3;
-    private int maxAllowedFiles = 5;
+    private List<IBrowserFile> loadedFiles = new List<IBrowserFile>();
+    private const long maxFileSize = 1024 * 1024 * 3;
+    private const int maxAllowedFiles = 5;
     private bool isLoading;
 
     private async Task LoadFiles(InputFileChangeEventArgs e)
@@ -246,33 +221,40 @@
         isLoading = true;
         loadedFiles.Clear();
 
+        if (e.FileCount > maxAllowedFiles)
+        {
+            Errors.Add($"Error: Attempting to upload {e.FileCount} files, but only {maxAllowedFiles} files are allowed");
+            Logger.LogError(Errors.Last());
+            isLoading = false;
+            return;
+        }
+
         foreach (var file in e.GetMultipleFiles(maxAllowedFiles))
         {
-            if (e.FileCount > maxAllowedFiles)
-            {
-                Logger.LogError($"Error: Attempting to upload {e.FileCount} files, but only {maxAllowedFiles} files are allowed");
-                return;
-            }
             try
             {
                 var trustedFileName = Path.ChangeExtension(file.Name, Path.GetExtension(file.Name));
-                var path = Path.Combine(Config.GetValue<string>("FileStorage")!, "unsafe_uploads",
-                    trustedFileName);
+                var path = Path.Combine(Config.GetValue<string>("FileStorage")!, "unsafe_uploads", trustedFileName);
+
                 Directory.CreateDirectory(Path.Combine(Config.GetValue<string>("FileStorage")!, "unsafe_uploads"));
 
                 await using FileStream fs = new(path, FileMode.Create);
                 await file.OpenReadStream(maxFileSize).CopyToAsync(fs);
 
                 loadedFiles.Add(file);
-
                 Logger.LogInformation($"Unsafe Filename: {trustedFileName} File saved: {file.Name}");
             }
             catch (Exception ex)
             {
                 Logger.LogError($"File: {file.Name} Error: {ex.Message}");
+                Errors.Add($"File: {file.Name} Error: {ex.Message}");
             }
         }
 
         isLoading = false;
+    }
+
+    public void Dispose()
+    {
     }
 }
