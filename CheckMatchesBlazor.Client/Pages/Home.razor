@@ -54,45 +54,187 @@
             </div>
         </div>
     </div>
-
 </EditForm>
 
 @code {
     [SupplyParameterFromForm]
     private BetsCheck? Model { get; set; } = new();
 
+    private IList<string> Errors { get; set; } = new List<string>();
+    private bool success = false;
+    private List<IBrowserFile> loadedFiles = new List<IBrowserFile>();
+    private const long maxFileSize = 1024 * 1024 * 3;
+    private const int maxAllowedFiles = 5;
+    private bool isLoading;
+
     protected override void OnInitialized()
     {
-        string directoryPath = Config.GetValue<string>("FileStorage")!;
-        string fileExtension = ".json";
+        InitializeModel();
+        ClearDirectories("unsafe_uploads", ".json");
+        ClearDirectories("bets_result", ".json");
+    }
 
+    private void InitializeModel()
+    {
         if (Model is null)
         {
-            Model!.Matches = 0;
-            Model.MatchResult = new List<string>();
-            Model.MessageResults = new List<string>();
-            Model.Result = new List<int>(new int[6]);
+            Model = new BetsCheck
+                {
+                    Matches = 0,
+                    MatchResult = new List<string>(),
+                    MessageResults = new List<string>(),
+                    Result = new List<int>(new int[6])
+                };
         }
-        if (Directory.Exists(Path.Combine(directoryPath, "unsafe_uploads")))
+    }
+
+    private void ClearDirectories(string folderName, string fileExtension)
+    {
+        string directoryPath = Path.Combine(Config.GetValue<string>("FileStorage")!, folderName);
+        if (Directory.Exists(directoryPath))
         {
-            string[] files = Directory.GetFiles(Path.Combine(directoryPath, "unsafe_uploads"), fileExtension);
-            foreach (var file in files)
-            {
-                File.Delete(file);
-            }
-        }
-        if (Directory.Exists(Path.Combine(directoryPath, "bets_result")))
-        {
-            string[] files = Directory.GetFiles(Path.Combine(directoryPath, "bets_result"), fileExtension);
-            foreach (var file in files)
+            foreach (var file in Directory.GetFiles(directoryPath, "*" + fileExtension))
             {
                 File.Delete(file);
             }
         }
     }
 
-    private IList<string> Errors { get; set; } = new List<string>();
-    private bool success = false;
+    private async Task LoadFiles(InputFileChangeEventArgs e)
+    {
+        isLoading = true;
+        loadedFiles.Clear();
+
+        if (e.FileCount > maxAllowedFiles)
+        {
+            AddError($"Error: Attempting to upload {e.FileCount} files, but only {maxAllowedFiles} files are allowed");
+            isLoading = false;
+            return;
+        }
+
+        foreach (var file in e.GetMultipleFiles(maxAllowedFiles))
+        {
+            await SaveFileAsync(file);
+        }
+
+        isLoading = false;
+    }
+
+    private async Task SaveFileAsync(IBrowserFile file)
+    {
+        try
+        {
+            string trustedFileName = Path.ChangeExtension(file.Name, Path.GetExtension(file.Name));
+            string filePath = Path.Combine(Config.GetValue<string>("FileStorage")!, "unsafe_uploads", trustedFileName);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+
+            await using FileStream fs = new(filePath, FileMode.Create);
+            await file.OpenReadStream(maxFileSize).CopyToAsync(fs);
+
+            loadedFiles.Add(file);
+            Logger.LogInformation($"File saved: {file.Name}");
+        }
+        catch (Exception ex)
+        {
+            AddError($"File: {file.Name} Error: {ex.Message}");
+        }
+    }
+
+    private void AddError(string message)
+    {
+        Errors.Add(message);
+        Logger.LogError(message);
+    }
+
+    private void OnValidSubmit()
+    {
+        Model!.MessageResults!.Clear();
+        Errors.Clear();
+        success = false;
+
+        string rootFolder = Config.GetValue<string>("FileStorage")!;
+        string startFolder = Path.Combine(rootFolder, "unsafe_uploads");
+        string pathResult = "bets_result";
+
+        if (!Directory.Exists(startFolder))
+        {
+            AddError("The file bets is required");
+            return;
+        }
+
+        var files = new DirectoryInfo(startFolder).GetFiles("*.json", SearchOption.AllDirectories).OrderBy(file => file.Name);
+
+        foreach (var file in files)
+        {
+            ProcessFile(file, rootFolder, pathResult);
+        }
+
+        Logger.LogInformation("Submit: Processing form");
+        StateHasChanged();
+    }
+
+    private void ProcessFile(FileInfo file, string rootFolder, string pathResult)
+    {
+        var bets = LoadBets(file.FullName);
+        var gameResult = Model!.Result!;
+        var bettingResult = new List<Bets>();
+        int match = 0;
+
+        string outFileName = Path.Combine(rootFolder, pathResult, file.Name);
+        Directory.CreateDirectory(Path.Combine(rootFolder, pathResult));
+
+        foreach (var bet in bets)
+        {
+            var matchNumbers = CompareNumbers(bet, gameResult);
+
+            if (matchNumbers.Any())
+            {
+                bettingResult.Add(new Bets { Row = bet.Row, Numbers = matchNumbers });
+                Model.MessageResults!.Add($"Result in row {bet.Row} matches these numbers: {string.Join(", ", matchNumbers)}");
+            }
+            else
+            {
+                Model.MessageResults!.Add($"Result in row {bet.Row} doesn't match any number.");
+            }
+
+            if (matchNumbers.Count == gameResult.Count)
+            {
+                match++;
+                Model.Matches = match;
+                Model.MatchResult!.Add($"Result in row {bet.Row} matches these numbers: {string.Join(", ", matchNumbers)} in file {file.Name}");
+                success = true;
+            }
+        }
+
+        SaveResultsAsJson(new BetReport
+            {
+                TotalResults = bettingResult.Count,
+                TotalMatches = match,
+                BettingResult = bettingResult
+            }, outFileName);
+    }
+
+    public static void SaveResultsAsJson(BetReport bets, string outFileName)
+    {
+        string json = JsonSerializer.Serialize(bets);
+        File.WriteAllText(outFileName, json);
+    }
+
+    public static List<Bets> LoadBets(string fileName)
+    {
+        string json = File.ReadAllText(fileName);
+        return JsonSerializer.Deserialize<Dictionary<string, List<Bets>>>(json)?["Bets"] ?? new List<Bets>();
+    }
+
+    public static List<int> CompareNumbers(Bets bet, List<int> gameResult)
+    {
+        return bet.Numbers?.Where(gameResult.Contains).ToList() ?? new List<int>();
+    }
+
+    public void Dispose()
+    {
+    }
 
     public class BetsCheck
     {
@@ -129,132 +271,5 @@
         public int TotalResults { get; set; }
         public int TotalMatches { get; set; }
         public List<Bets> BettingResult { get; set; } = new List<Bets>();
-    }
-
-    private void OnValidSubmit()
-    {
-        Model!.MessageResults!.Clear();
-        Errors.Clear();
-        Model.MessageResults.Clear();
-        string rootFolder = Config.GetValue<string>("FileStorage")!;
-        string startFolder = Path.Combine(rootFolder, "unsafe_uploads");
-        string pathResult = "bets_result";
-
-        if (!Directory.Exists(startFolder))
-        {
-            Errors.Add("The file bets is required");
-            return;
-        }
-
-        DirectoryInfo dir = new(startFolder);
-        var fileQuery = dir.GetFiles("*.json", SearchOption.AllDirectories).OrderBy(file => file.Name);
-
-        foreach (FileInfo fi in fileQuery)
-        {
-            List<Bets> bets = LoadBets(fi.FullName);
-            List<int> gameResult = Model!.Result!;
-
-            List<Bets> bettingResult = new List<Bets>();
-            int match = 0;
-            Directory.CreateDirectory(Path.Combine(rootFolder, pathResult));
-            string outFileName = Path.Combine(rootFolder, pathResult, fi.Name);
-
-            foreach (var bet in bets!)
-            {
-                List<int> matchNumbers = CompareNumbers(bet, gameResult);
-
-                if (matchNumbers.Count > 0)
-                {
-                    bettingResult.Add(new Bets { Row = bet.Row, Numbers = matchNumbers });
-                    Model.MessageResults!.Add($"Result in row {bet.Row} matches these numbers: {string.Join(", ", matchNumbers)}");
-                }
-                else
-                {
-                    Model.MessageResults!.Add($"Result in row {bet.Row} doesn't match any number.");
-                }
-
-                if (matchNumbers.Count == gameResult.Count)
-                {
-                    match++;
-                    Model.Matches = match;
-                    Model.MatchResult!.Add($"Result in row {bet.Row} matches these numbers: {string.Join(", ", matchNumbers)} in file {fi.Name}");
-                    success = true;
-                }
-            }
-
-            SaveResultsAsJson(new BetReport
-                {
-                    TotalResults = bettingResult.Count,
-                    TotalMatches = match,
-                    BettingResult = bettingResult
-                }, outFileName);
-        }
-
-        Logger.LogInformation("Submit: Processing form");
-        StateHasChanged();
-    }
-
-    public static void SaveResultsAsJson(BetReport bets, string outFileName)
-    {
-        string json = JsonSerializer.Serialize(bets);
-        File.WriteAllText(outFileName, json);
-    }
-
-    public static List<Bets> LoadBets(string fileName)
-    {
-        string json = File.ReadAllText(fileName);
-        return JsonSerializer.Deserialize<Dictionary<string, List<Bets>>>(json)?["Bets"] ?? new List<Bets>();
-    }
-
-    public static List<int> CompareNumbers(Bets bet, List<int> gameResult)
-    {
-        return bet.Numbers?.Where(gameResult.Contains).ToList() ?? new List<int>();
-    }
-
-    private List<IBrowserFile> loadedFiles = new List<IBrowserFile>();
-    private const long maxFileSize = 1024 * 1024 * 3;
-    private const int maxAllowedFiles = 5;
-    private bool isLoading;
-
-    private async Task LoadFiles(InputFileChangeEventArgs e)
-    {
-        isLoading = true;
-        loadedFiles.Clear();
-
-        if (e.FileCount > maxAllowedFiles)
-        {
-            Errors.Add($"Error: Attempting to upload {e.FileCount} files, but only {maxAllowedFiles} files are allowed");
-            Logger.LogError(Errors.Last());
-            isLoading = false;
-            return;
-        }
-
-        foreach (var file in e.GetMultipleFiles(maxAllowedFiles))
-        {
-            try
-            {
-                var trustedFileName = Path.ChangeExtension(file.Name, Path.GetExtension(file.Name));
-                var path = Path.Combine(Config.GetValue<string>("FileStorage")!, "unsafe_uploads", trustedFileName);
-
-                Directory.CreateDirectory(Path.Combine(Config.GetValue<string>("FileStorage")!, "unsafe_uploads"));
-
-                await using FileStream fs = new(path, FileMode.Create);
-                await file.OpenReadStream(maxFileSize).CopyToAsync(fs);
-
-                loadedFiles.Add(file);
-                Logger.LogInformation($"Unsafe Filename: {trustedFileName} File saved: {file.Name}");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"File: {file.Name} Error: {ex.Message}");
-                Errors.Add($"File: {file.Name} Error: {ex.Message}");
-            }
-        }
-
-        isLoading = false;
-    }
-
-    public void Dispose()
-    {
     }
 }

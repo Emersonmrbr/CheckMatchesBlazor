@@ -1,0 +1,230 @@
+﻿@page "/help"
+@using System.Text.Json
+@using System.Collections.Generic
+
+@inherits LayoutComponentBase
+
+<h1>Guia de Uso do Site: Check Matches</h1>
+
+<section>
+    <h2>Bem-vindo ao Check Matches!</h2>
+    <p>
+        Esta aplicação foi desenvolvida para ajudar você a comparar apostas e verificar resultados de maneira fácil e prática.
+        Siga os passos abaixo para utilizar todas as funcionalidades.
+    </p>
+</section>
+
+<hr />
+
+<section>
+    <h3>1. Inserir os Números do Resultado</h3>
+    <ol>
+        <li>
+            <strong>Localize os campos numerados:</strong>
+            Na página inicial, você verá seis campos para inserir os números do resultado desejado.
+        </li>
+        <li>
+            <strong>Preencha os campos:</strong>
+            Digite os números entre <strong>1 e 60</strong>. Cada campo representa uma posição no resultado esperado.
+        </li>
+        <li>
+            <strong>Validação:</strong>
+            Certifique-se de que os números estão dentro do intervalo permitido (1 a 60) e não são repetidos.
+        </li>
+    </ol>
+</section>
+
+<hr />
+
+<section>
+    <h3>2. Upload de Arquivos de Apostas</h3>
+    <ol>
+        <li>
+            <strong>Selecionar arquivos:</strong>
+            Clique no botão <em>"Upload bets"</em> para carregar os arquivos de apostas no formato <code>.json</code>.
+        </li>
+        <li>
+            <strong>Limite de arquivos:</strong>
+            Você pode carregar no máximo <strong>5 arquivos por vez</strong>, e cada arquivo não pode exceder <strong>3 MB</strong>.
+        </li>
+        <li>
+            <strong>Formatos aceitos:</strong>
+            Os arquivos devem seguir o padrão JSON com estrutura compatível. Exemplo de formato:
+            <pre>
+{
+  "Bets": [
+    { "Row": 1, "Numbers": [1, 2, 3, 4, 5, 6] },
+    { "Row": 2, "Numbers": [10, 20, 30, 40, 50, 60] }
+  ]
+}
+            </pre>
+        </li>
+    </ol>
+</section>
+
+<hr />
+
+<section>
+    <h3>3. Processar as Apostas</h3>
+    <ol>
+        <li>
+            <strong>Verificar apostas:</strong>
+            Após preencher os números e carregar os arquivos, clique no botão <em>"Check"</em>.
+        </li>
+        <li>
+            <strong>Resultados:</strong>
+            O site processará as apostas e exibirá os seguintes dados:
+            <ul>
+                <li>
+                    <strong>Apostas com pelo menos um número compatível:</strong>
+                    A quantidade será exibida em tempo real.
+                </li>
+                <li>
+                    <strong>Resultados com números exatos:</strong>
+                    Quantidade de apostas que correspondem ao resultado completo.
+                </li>
+            </ul>
+        </li>
+    </ol>
+</section>
+
+<hr />
+
+<section>
+    <h3>4. Visualizar o Resumo</h3>
+    <p>
+        A área de resumo exibe:
+    </p>
+    <ul>
+        <li><strong>Número total de apostas analisadas.</strong></li>
+        <li><strong>Números que foram compatíveis em cada linha.</strong></li>
+        <li><strong>Erros ou mensagens de sucesso.</strong></li>
+    </ul>
+</section>
+
+<hr />
+
+<section>
+    <h3>5. Gerar Relatório</h3>
+    <p>
+        Um relatório JSON é gerado automaticamente para cada arquivo processado:
+    </p>
+    <ul>
+        <li>
+            Inclui informações detalhadas das apostas, números compatíveis e estatísticas.
+        </li>
+        <li>
+            Os relatórios ficam salvos no diretório configurado (<code>bets_result</code>).
+        </li>
+    </ul>
+</section>
+
+<hr />
+
+<section>
+    <h3>6. Dicas Importantes</h3>
+    <ul>
+        <li><strong>Manter os diretórios organizados:</strong> Certifique-se de que a pasta de upload (<code>unsafe_uploads</code>) e a de resultados (<code>bets_result</code>) estão configuradas corretamente.</li>
+        <li><strong>Corrigir erros:</strong> Qualquer erro de upload ou validação será destacado no painel de erros.</li>
+        <li><strong>Segurança:</strong> Apenas arquivos JSON confiáveis devem ser carregados para evitar problemas.</li>
+    </ul>
+</section>
+
+<hr />
+
+<section>
+    <p>
+        Essa interface é fácil de usar, interativa e baseada na tecnologia Blazor.
+        Se precisar de ajuda adicional, entre em contato pelo suporte indicado no rodapé da página.
+    </p>
+    <p><strong>Divirta-se verificando suas apostas e boa sorte!</strong></p>
+</section>
+<hr />
+
+<section>
+    <h3>7. Configurações Avançadas</h3>
+    <p>
+        Se você for um administrador ou desenvolvedor responsável pelo ambiente do sistema, veja as dicas abaixo para configurar e otimizar a aplicação:
+    </p>
+    <ul>
+        <li>
+            <strong>Configurar o armazenamento de arquivos:</strong>
+            Certifique-se de que as pastas configuradas no <code>appsettings.json</code> estão corretas:
+            <pre>
+{
+  "FileStorage": "c:\\dados\\checkmatches"
+}
+            </pre>
+        </li>
+        <li>
+            <strong>Configuração do logger:</strong>
+            Configure o nível de log para depurar problemas em <code>appsettings.json</code>:
+            <pre>
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information"
+    }
+  }
+}
+            </pre>
+        </li>
+        <li>
+            <strong>Segurança:</strong>
+            Implemente um controle de acesso para restringir quem pode carregar arquivos e processar apostas.
+        </li>
+    </ul>
+</section>
+
+<hr />
+
+<section>
+    <h3>8. Solução de Problemas</h3>
+    <ul>
+        <li>
+            <strong>Erro ao carregar arquivos:</strong>
+            Verifique se os arquivos possuem o formato JSON correto e se não excedem o tamanho máximo permitido.
+        </li>
+        <li>
+            <strong>Erro ao processar apostas:</strong>
+            Confirme se os números inseridos no formulário de resultado estão corretos e sem repetições.
+        </li>
+        <li>
+            <strong>Não encontra resultados compatíveis:</strong>
+            Certifique-se de que as apostas carregadas contêm números dentro do intervalo permitido (1 a 60).
+        </li>
+    </ul>
+</section>
+
+<hr />
+
+<section>
+    <h3>9. Suporte Técnico</h3>
+    <p>
+        Se encontrar problemas ou precisar de ajuda, entre em contato com nossa equipe de suporte técnico. Detalhes de contato:
+    </p>
+    <ul>
+        <li><strong>Site:</strong> <a href="http://nucleomap.com.br">http://nucleomap.com.br</a></li>
+        <li><strong>E-mail:</strong> <a href="mailto:nucleomap@nucleomap.com.br">nucleomap@nucleomap.com.br</a></li>
+        <li><strong>Horário de atendimento:</strong> Segunda a Sexta, das 9h às 18h</li>
+    </ul>
+</section>
+
+<hr />
+
+<section>
+    <h3>10. Atualizações e Melhorias</h3>
+    <p>
+        Estamos sempre trabalhando para melhorar nossa aplicação. Verifique regularmente as atualizações no site oficial.
+        Caso tenha sugestões ou encontre um bug, envie seu feedback pelo e-mail de suporte.
+    </p>
+</section>
+
+<hr />
+
+<footer>
+    <p><strong>Check Matches © 2024</strong></p>
+    <p>Desenvolvido por <em>Nucleus MAP</em> - Machines, Automation, and Programming.</p>
+</footer>
