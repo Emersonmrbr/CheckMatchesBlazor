@@ -65,12 +65,12 @@
     private List<IBrowserFile> loadedFiles = new List<IBrowserFile>();
     private const long maxFileSize = 1024 * 1024 * 3;
     private const int maxAllowedFiles = 5;
-    private bool isLoading;
+    private string tempFolder = Path.GetTempPath();
 
     protected override void OnInitialized()
     {
         InitializeModel();
-        ClearDirectories("unsafe_uploads", ".json");
+        // ClearDirectories("unsafe_uploads", ".json");
         ClearDirectories("bets_result", ".json");
     }
 
@@ -90,7 +90,7 @@
 
     private void ClearDirectories(string folderName, string fileExtension)
     {
-        string directoryPath = Path.Combine(Config.GetValue<string>("FileStorage")!, folderName);
+        string directoryPath = Path.Combine(tempFolder, folderName);
         if (Directory.Exists(directoryPath))
         {
             foreach (var file in Directory.GetFiles(directoryPath, "*" + fileExtension))
@@ -102,13 +102,11 @@
 
     private async Task LoadFiles(InputFileChangeEventArgs e)
     {
-        isLoading = true;
         loadedFiles.Clear();
 
         if (e.FileCount > maxAllowedFiles)
         {
             AddError($"Error: Attempting to upload {e.FileCount} files, but only {maxAllowedFiles} files are allowed");
-            isLoading = false;
             return;
         }
 
@@ -117,7 +115,6 @@
             await SaveFileAsync(file);
         }
 
-        isLoading = false;
     }
 
     private async Task SaveFileAsync(IBrowserFile file)
@@ -125,9 +122,12 @@
         try
         {
             string trustedFileName = Path.ChangeExtension(file.Name, Path.GetExtension(file.Name));
-            string filePath = Path.Combine(Config.GetValue<string>("FileStorage")!, "unsafe_uploads", trustedFileName);
-
-            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+            string directoryPath = Path.Combine(tempFolder, "unsafe_uploads");
+            string filePath = Path.Combine(directoryPath, trustedFileName);
+            if (!Directory.Exists(directoryPath))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+            }
 
             await using FileStream fs = new(filePath, FileMode.Create);
             await file.OpenReadStream(maxFileSize).CopyToAsync(fs);
@@ -153,13 +153,12 @@
         Errors.Clear();
         success = false;
 
-        string rootFolder = Config.GetValue<string>("FileStorage")!;
-        string startFolder = Path.Combine(rootFolder, "unsafe_uploads");
+        string startFolder = Path.Combine(tempFolder, "unsafe_uploads");
         string pathResult = "bets_result";
 
         if (!Directory.Exists(startFolder))
         {
-            AddError("The file bets is required");
+            AddError($"The directory {startFolder} don't exists ");
             return;
         }
 
@@ -167,22 +166,22 @@
 
         foreach (var file in files)
         {
-            ProcessFile(file, rootFolder, pathResult);
+            ProcessFile(file, tempFolder, pathResult);
         }
 
         Logger.LogInformation("Submit: Processing form");
         StateHasChanged();
     }
 
-    private void ProcessFile(FileInfo file, string rootFolder, string pathResult)
+    private void ProcessFile(FileInfo file, string tempFolder, string pathResult)
     {
         var bets = LoadBets(file.FullName);
         var gameResult = Model!.Result!;
         var bettingResult = new List<Bets>();
         int match = 0;
 
-        string outFileName = Path.Combine(rootFolder, pathResult, file.Name);
-        Directory.CreateDirectory(Path.Combine(rootFolder, pathResult));
+        string outFileName = Path.Combine(tempFolder, pathResult, file.Name);
+        Directory.CreateDirectory(Path.Combine(tempFolder, pathResult));
 
         foreach (var bet in bets)
         {
